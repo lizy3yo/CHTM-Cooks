@@ -1,0 +1,122 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { connectDB } from '@/lib/mongodb';
+import User from '@/lib/models/User';
+import { hashPassword } from '@/lib/auth/password';
+import { createToken } from '@/lib/auth/jwt';
+import { UserRole, UserResponse } from '@/types';
+import { error } from 'console';
+
+// This API route handles user registration. It validates the input, checks for existing users, hashes the password, creates a new user in the database, and returns a JWT token along with the user information (excluding the password).
+export async function POST  (request: NextRequest) {
+    try{
+        // Connect to the database before performing any operations
+        await connectDB();
+
+        // Parse the request body to extract email, password, name, and role
+        const body = await request.json();
+        const { firstName, lastName, email, password, year_level, block, role, agreement } = body;
+        const userRole: UserRole = role || 'student';
+
+        // Validate the required fields
+        if (!firstName || !lastName || !email || !password) {
+            return NextResponse.json(
+                { error: 'First name, last name, email, and password are required.' },
+                { status: 400 }
+            );
+        }
+
+        // Additional validation for student-specific fields
+        if (userRole === 'student') {
+            if (!year_level || !block || agreement !== true) {
+                return NextResponse.json(
+                    { error: 'Year level, block, and agreement are required for students.' },
+                    { status: 400 }
+                );
+            }
+        }
+            
+        // Check if a user with the provided email already exists
+        const existingUser = await User.findOne({email: email.toLowerCase()});
+        if (existingUser) {
+            return NextResponse.json(
+                {error: 'User already exists.'},
+                {status: 400}
+            );
+        }
+        
+        // Validate password strength
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return NextResponse.json(
+                { error: 'Password must be at least 8 characters long and include uppercase letters, lowercase letters, numbers, and special characters.' },
+                { status: 400 }
+            );
+        }
+
+        // Additional email validation for students
+        if(userRole === 'student') {
+        const emailRegex = /^[0-9]{9}@gordoncollege\.edu\.ph$/;
+        if (!emailRegex.test(email)) {
+            return NextResponse.json(
+                { error: 'Email must be a valid Gordon College address (e.g., 1929183@gordoncollege.edu.ph).' },
+                { status: 400 }
+            );
+        }
+      }
+
+        // Hash the password before storing it in the database
+        const hashedPassword = await hashPassword(password);
+
+        // Create a new user document in the database
+        const userData: any = {
+            email: email.toLowerCase(),
+            password: hashedPassword,
+            firstName,
+            lastName,
+            role: userRole
+        };
+
+        // If the user role is 'student', include additional fields specific to students
+        if (userRole === 'student') {
+            userData.year_level = year_level;
+            userData.block = block;
+            userData.agreement = agreement;
+        }
+
+        const newUser = await User.create(userData);     
+
+        // Create a JWT token with user information
+        const token = createToken({
+            userId: newUser._id.toString(),
+            email: newUser.email,
+            role: newUser.role
+        });
+
+        // Prepare the user response object, excluding sensitive information like the password
+        const userResponse: UserResponse = {
+            id: newUser._id.toString(),
+            email: newUser.email,
+            firstName: newUser.firstName,
+            lastName: newUser.lastName,
+            role: newUser.role
+        };
+
+        // Return a success response with the user information and JWT token
+        return NextResponse.json(
+            {
+                message: 'User created successfully.',
+                user: userResponse,
+                token
+            },
+            {status: 201}
+        );
+
+    // Catch and handle any errors that occur during the registration process
+    } catch (error:any) {
+        console.error('Error in registration:', error);
+        return NextResponse.json(
+            {error: 'An error occurred during registration.'},
+            {status: 500}
+        );
+    }
+}
