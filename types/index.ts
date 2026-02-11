@@ -53,3 +53,23 @@ export interface UserResponse {
     lastName: string;
     role: UserRole;
 }
+
+export interface RateLimitConfig {
+    windowMs: number; 
+    maxRequests: number;
+    message?: string; 
+    skipSuccessfulRequests?: boolean; 
+    skipFailedRequests?: boolean; 
+}
+
+export interface RateLimitResult {
+    allowed: boolean;
+    limit: number;
+    remaining: number;
+    resetTime: Date;
+    retryAfter?: number;
+}
+
+export type RateLimitRules = {
+    [key: string]: RateLimitConfig;
+};
