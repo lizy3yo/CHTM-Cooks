@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticate, authorizeRole } from '@/lib/auth/middleware';
+import { rateLimit } from '@/lib/rateLimit/middleware';
 
 
 export async function GET (request: NextRequest) {
@@ -7,6 +8,11 @@ export async function GET (request: NextRequest) {
     
     // Authenticate the user making the request
     const user = await authenticate(request);
+
+    const rateLimitResult = await rateLimit(request, 'api:read', user);
+    if (!rateLimitResult.allowed) {
+        return rateLimitResult.response!;
+    }
 
     // Authorize the user to ensure they have the 'student' role
     if (!authorizeRole(user, ['student'])) {

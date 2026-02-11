@@ -2,13 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import { hashPassword } from '@/lib/auth/password';
-import { createToken } from '@/lib/auth/jwt';
+import RefreshToken from '@/lib/models/RefreshToken';
+import { 
+    createAccessToken,
+    createRefreshToken,
+    getTokenExpiry,
+    getRefreshTokenExpiry
+ } from '@/lib/auth/jwt';
 import { UserRole, UserResponse } from '@/types';
 import { error } from 'console';
+import { rateLimit } from '@/lib/rateLimit/middleware';
 
 // This API route handles user registration. It validates the input, checks for existing users, hashes the password, creates a new user in the database, and returns a JWT token along with the user information (excluding the password).
 export async function POST  (request: NextRequest) {
     try{
+
+        const rateLimitResult = await rateLimit(request, 'auth:register');
+        if (!rateLimitResult.allowed) {
+            return rateLimitResult.response!;
+        }
+        
         // Connect to the database before performing any operations
         await connectDB();
 
@@ -86,12 +99,26 @@ export async function POST  (request: NextRequest) {
         const newUser = await User.create(userData);     
 
         // Create a JWT token with user information
-        const token = createToken({
+        const accessToken = createAccessToken({
             userId: newUser._id.toString(),
             email: newUser.email,
             role: newUser.role
         });
 
+        // Create a refresh token and store it in the database
+        const refreshTokenString = createRefreshToken();
+
+        // Store the refresh token in the database with an association to the user and an expiration date
+        await RefreshToken.create({
+            userId: newUser._id.toString(),
+            token: refreshTokenString,
+            expiresAt: getRefreshTokenExpiry(),
+            isRevoked: false,
+        });
+
+        // Get the token expiry time to include in the response
+        const expiry = getTokenExpiry();
+        
         // Prepare the user response object, excluding sensitive information like the password
         const userResponse: UserResponse = {
             id: newUser._id.toString(),
@@ -106,7 +133,9 @@ export async function POST  (request: NextRequest) {
             {
                 message: 'User created successfully.',
                 user: userResponse,
-                token
+                accessToken,
+                refreshToken: refreshTokenString,
+                expiresIn: expiry
             },
             {status: 201}
         );

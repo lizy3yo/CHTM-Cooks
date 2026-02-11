@@ -10,12 +10,20 @@ import {
     getRefreshTokenExpiry
  } from '@/lib/auth/jwt';
 import { UserResponse } from '@/types';
+import { rateLimit } from '@/lib/rateLimit/middleware';
 import { error } from 'console';
 import { access } from 'fs';
 
 // This API route handles user login. It validates the input, checks the user's credentials, and returns a JWT token along with the user information (excluding the password) upon successful authentication.
 export async function POST(request: NextRequest) {
     try {
+
+        // Apply rate limiting to the login route to prevent brute-force attacks
+        const rateLimitResult = await rateLimit(request, 'auth:login');
+        if (!rateLimitResult.allowed) {
+            return rateLimitResult.response!;
+        }
+
         // Connect to the database before performing any operations
         await connectDB();
 
