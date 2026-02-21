@@ -17,6 +17,10 @@ export interface IUser {
     block: string;
     agreement: boolean;
 
+    // Fields for email verification
+    emailVerified: boolean;
+    emailVerificationToken?: IEmailVerificationToken | null;
+
 }
 
 // This interface represents the structure of a refresh token document in the database, which is used for managing user sessions and token revocation
@@ -54,6 +58,7 @@ export interface UserResponse {
     role: UserRole;
 }
 
+// This interface represents the configuration for rate limiting, including the time window, maximum requests allowed, and optional settings for skipping certain types of requests
 export interface RateLimitConfig {
     windowMs: number; 
     maxRequests: number;
@@ -62,6 +67,7 @@ export interface RateLimitConfig {
     skipFailedRequests?: boolean; 
 }
 
+// This interface represents the result of a rate limit check, including whether the request is allowed, the limit and remaining requests, and the time until the limit resets
 export interface RateLimitResult {
     allowed: boolean;
     limit: number;
@@ -70,6 +76,27 @@ export interface RateLimitResult {
     retryAfter?: number;
 }
 
+// This type represents a collection of rate limit rules, where each key is a unique identifier for the rule and the value is the corresponding configuration for that rule
 export type RateLimitRules = {
     [key: string]: RateLimitConfig;
 };
+
+export interface IPasswordResetToken {
+    _id: string;
+    userId: string;
+    token: string;
+    expiresAt: Date;
+    createdAt: Date;
+    used: boolean;
+}
+
+export interface IEmailVerificationToken {
+    token: string;
+    expiresAt: Date;
+}
+
+export interface EmailResult {
+    success: boolean;
+    message?: string;
+    error?: string;
+}
