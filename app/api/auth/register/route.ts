@@ -12,6 +12,9 @@ import {
 import { UserRole, UserResponse } from '@/types';
 import { error } from 'console';
 import { rateLimit } from '@/lib/rateLimit/middleware';
+import { sendEmail } from '@/lib/email/nodemailer';
+import { getEmailVerificationTemplate } from '@/lib/email/templates/emailVerification';
+import { generateSecureToken, getEmailVerificationExpiry } from '@/lib/auth/token';
 
 // This API route handles user registration. It validates the input, checks for existing users, hashes the password, creates a new user in the database, and returns a JWT token along with the user information (excluding the password).
 export async function POST  (request: NextRequest) {
@@ -80,15 +83,24 @@ export async function POST  (request: NextRequest) {
         // Hash the password before storing it in the database
         const hashedPassword = await hashPassword(password);
 
+        const verificationToken = generateSecureToken();
+        const verificationExpiry = getEmailVerificationExpiry();
+
         // Create a new user document in the database
         const userData: any = {
             email: email.toLowerCase(),
             password: hashedPassword,
             firstName,
             lastName,
-            role: userRole
+            role: userRole,
+            emailVerified: false,
+            emailVerificationToken: {
+                token: verificationToken,
+                expiresAt: verificationExpiry
+            }
         };
 
+        
         // If the user role is 'student', include additional fields specific to students
         if (userRole === 'student') {
             userData.year_level = year_level;
@@ -96,7 +108,29 @@ export async function POST  (request: NextRequest) {
             userData.agreement = agreement;
         }
 
+        // Save the new user to the database
         const newUser = await User.create(userData);     
+
+        // Generate the email verification link and send the verification email to the user
+        const appUrl = process.env.APP_URL || 'http://localhost:3000';
+        const verificationLink = `${appUrl}/verify-email?token=${verificationToken}`;
+
+        // Create the email verification template
+        const { html, text } = getEmailVerificationTemplate(
+        newUser.firstName,
+        verificationLink,
+        24 // 24 hours
+        );
+
+        // Send email (don't block registration if email fails)
+        sendEmail(
+        newUser.email,
+        'Verify Your Email - CHTM Cooks',
+        html,
+        text
+        ).catch(error => {
+        console.error('Failed to send verification email:', error);
+        });
 
         // Create a JWT token with user information
         const accessToken = createAccessToken({

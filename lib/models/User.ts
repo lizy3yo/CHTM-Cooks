@@ -46,6 +46,15 @@ const UserSchema = new Schema<IUser>({
         required: function(this: any) {return this.role === 'student';},
     },
 
+    // Fields for email verification
+    emailVerified: {
+        type: Boolean,
+        default: false,
+    },
+    emailVerificationToken: {
+        token: { type: String },
+        expiresAt: { type: Date }
+    },
 
     createdAt: {
         type: Date,
