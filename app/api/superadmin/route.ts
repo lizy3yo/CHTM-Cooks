@@ -39,8 +39,8 @@ export async function GET (request: NextRequest) {
                 users: allUsers,
                 systemStats: {
                    students: allUsers.filter(u => u.role === 'student').length,
-                   advisors: allUsers.filter(u => u.role === 'advisor').length,
-                   consultants: allUsers.filter(u => u.role === 'consultant').length,
+                   instructors: allUsers.filter(u => u.role === 'instructor').length,
+                   custodians: allUsers.filter(u => u.role === 'custodian').length,
             },
             }
         });
